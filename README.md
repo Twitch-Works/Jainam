@@ -90,6 +90,34 @@ two in sync.
 
 `GET /health` reports the active env.
 
+## Deploying the API to Vercel
+
+Only `apps/api` is deployed — the Expo app is shipped separately. Config
+lives in `vercel.json` + `api/index.ts` (a thin serverless wrapper around
+`buildApp()`) + `public/` (a placeholder landing page).
+
+1. **Import the repo** into Vercel. Leave **Root Directory = repo root**
+   (the function needs the pnpm workspace). `vercel.json` sets the build
+   (`pnpm --filter=@jainam/api... run build`) and rewrites every path to the
+   function.
+2. **Set env vars** (Project → Settings → Environment Variables). Required —
+   the function exits on boot if any are missing:
+   `APP_ENV=production`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY`, plus `LLM_PROVIDER` and its key
+   (`OPENAI_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` + `*_MODEL`).
+   Do **not** set `SUPABASE_DB_URL` (local-only, for `db:migrate`).
+3. **Region** — `vercel.json` pins `bom1`; change it to match your Supabase
+   project's region.
+4. **Deploy**, then point the app at it: set
+   `EXPO_PUBLIC_API_URL=https://<project>.vercel.app` in `apps/mobile/.env`
+   and rebuild.
+
+Migrations and seeds still run from a workstation against the hosted DB
+(`pnpm db:migrate` / `db:seed` / `db:bhajans`) — Vercel only runs the API.
+Note: `getGuruReply`'s provider fallbacks use a 30 s timeout each, so a fully
+failing chain can exceed the 60 s function limit — configure only the
+provider(s) you use.
+
 ## Auth notes
 
 - Local phone OTP uses fixed test codes (see `supabase/config.toml` →

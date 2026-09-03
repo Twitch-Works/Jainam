@@ -1,0 +1,11 @@
+# The API deploy only needs the workspace manifests + apps/api + packages/shared.
+# Everything below is dead weight in the build upload (kept out of the function too).
+apps/mobile/.expo/
+apps/mobile/dist/
+apps/mobile/web-build/
+assets/
+supabase/
+scripts/
+**/*.log
+.claude/
+.expo/
