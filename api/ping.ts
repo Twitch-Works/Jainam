@@ -1,7 +1,7 @@
 /**
- * Zero-dependency diagnostic. If GET /api/ping works but /health (rewritten to
- * /api/serverless) does not, the problem is the Fastify wrapper or its bundling
- * — not Vercel's function detection. Safe to delete once /health is confirmed.
+ * Zero-dependency diagnostic. If GET /api/ping works but /health does not, the
+ * problem is the Fastify wrapper or its bundling — not Vercel's function
+ * detection. Safe to delete once /health is confirmed.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 

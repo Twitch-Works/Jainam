@@ -92,14 +92,17 @@ two in sync.
 
 ## Deploying the API to Vercel
 
-Only `apps/api` is deployed — the Expo app is shipped separately. Config
-lives in `vercel.json` + `api/index.ts` (a thin serverless wrapper around
-`buildApp()`) + `public/` (a placeholder landing page).
+Only `apps/api` is deployed — the Expo app is shipped separately. The Vercel
+config sits at the **repo root**: `vercel.json`,
+`api/serverless/[[...path]].ts` (a catch-all wrapper around `buildApp()`),
+`api/ping.ts` (a no-dep health check), and `public/` (a placeholder landing
+page).
 
-1. **Import the repo** into Vercel. Leave **Root Directory = repo root**
-   (the function needs the pnpm workspace). `vercel.json` sets the build
-   (`pnpm --filter=@jainam/api... run build`) and rewrites every path to the
-   function.
+1. **Import the repo** into Vercel and leave **Root Directory = repo root**
+   (the function imports the built app + needs the pnpm workspace).
+   `vercel.json` sets the build (`pnpm --filter=@jainam/api... run build` —
+   compiles `@jainam/shared` + `@jainam/api`, incl. `.d.ts`) and routes every
+   non-file path to the function.
 2. **Set env vars** (Project → Settings → Environment Variables). Required —
    the function exits on boot if any are missing:
    `APP_ENV=production`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
@@ -108,7 +111,8 @@ lives in `vercel.json` + `api/index.ts` (a thin serverless wrapper around
    Do **not** set `SUPABASE_DB_URL` (local-only, for `db:migrate`).
 3. **Region** — `vercel.json` pins `bom1`; change it to match your Supabase
    project's region.
-4. **Deploy**, then point the app at it: set
+4. **Deploy**, then verify `…/api/ping` → `{"ok":true,…}` and `…/health` →
+   the health JSON. Point the app at it: set
    `EXPO_PUBLIC_API_URL=https://<project>.vercel.app` in `apps/mobile/.env`
    and rebuild.
 
