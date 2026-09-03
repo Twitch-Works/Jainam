@@ -6,15 +6,18 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "backgroundColor": "#F7F2E7",
     "icon": "./assets/images/icon.png",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.jainam.app",
+      "backgroundColor": "#F7F2E7",
       "infoPlist": {
         "UIBackgroundModes": ["audio"]
       }
     },
     "android": {
+      "backgroundColor": "#F7F2E7",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "monochromeImage": "./assets/images/adaptive-icon-monochrome.png",
@@ -25,7 +28,7 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.ico"
     },
     "plugins": [
       "expo-router",
@@ -34,7 +37,12 @@
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#F7F2E7"
+          "backgroundColor": "#F7F2E7",
+          "dark": {
+            "image": "./assets/images/splash-icon.png",
+            "resizeMode": "contain",
+            "backgroundColor": "#F7F2E7"
+          }
         }
       ],
       "expo-audio"
