@@ -255,6 +255,7 @@ export const askJainamSeedMessages = [
     suggested_title: null,
     suggested_description: null,
     suggested_practice: null,
+    suggested_bhajan: null,
     sort_order: 0,
   },
   {
@@ -266,6 +267,7 @@ export const askJainamSeedMessages = [
     suggested_title: "5 min Anupreksha",
     suggested_description: "Contemplate the nature of the soul.",
     suggested_practice: "anupreksha",
+    suggested_bhajan: null,
     sort_order: 1,
   },
 ];

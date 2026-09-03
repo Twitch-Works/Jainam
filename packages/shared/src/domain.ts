@@ -114,6 +114,8 @@ export type SuggestedPractice = {
   description: string;
   /** Set when the suggestion maps to a guided practice screen in the app. */
   practice?: SuggestedPracticeRef;
+  /** Set when the guru suggests a specific bhajan — opens `/bhajans/<number>`. */
+  bhajan?: number;
 };
 
 export type ChatMessage = {

@@ -8,10 +8,13 @@ import {
 } from "@jainam/shared";
 import { serviceClient } from "../lib/supabase.js";
 import { assertNoDbError } from "../lib/http.js";
-import { getGuruReply } from "../lib/guru.js";
+import { getGuruReply, type BhajanRef } from "../lib/guru.js";
 
 const MSG_COLS =
-  "id, role, text, sanskrit_text, sanskrit_transliteration, sanskrit_translation, suggested_title, suggested_description, suggested_practice, created_at";
+  "id, role, text, sanskrit_text, sanskrit_transliteration, sanskrit_translation, suggested_title, suggested_description, suggested_practice, suggested_bhajan, created_at";
+
+const SEED_COLS =
+  "role, text, sanskrit_text, sanskrit_transliteration, sanskrit_translation, suggested_title, suggested_description, suggested_practice, suggested_bhajan";
 
 type MsgRow = {
   id: string;
@@ -23,8 +26,29 @@ type MsgRow = {
   suggested_title: string | null;
   suggested_description: string | null;
   suggested_practice: string | null;
+  suggested_bhajan: number | null;
   created_at: string;
 };
+
+// The guru can suggest a bhajan by number, so it needs the catalogue. Small
+// and slow-changing → cache it for a few minutes.
+let bhajanCache: { at: number; refs: BhajanRef[] } | null = null;
+const BHAJAN_CACHE_MS = 5 * 60_000;
+
+async function loadBhajanRefs(): Promise<BhajanRef[]> {
+  if (bhajanCache && Date.now() - bhajanCache.at < BHAJAN_CACHE_MS) return bhajanCache.refs;
+  const { data, error } = await serviceClient
+    .from("bhajans")
+    .select("number, title, tune")
+    .order("sort_order", { ascending: true });
+  if (error) return bhajanCache?.refs ?? [];
+  const refs: BhajanRef[] = (data ?? []).map((r) => ({
+    number: r.number as number,
+    title: (r.title as string | null)?.trim() || (r.tune as string),
+  }));
+  bhajanCache = { at: Date.now(), refs };
+  return refs;
+}
 
 const asPracticeRef = (v: string | null): SuggestedPracticeRef | undefined =>
   v && (SUGGESTED_PRACTICE_REFS as readonly string[]).includes(v)
@@ -49,6 +73,7 @@ const toMessage = (row: MsgRow): ChatMessage => ({
           title: row.suggested_title,
           description: row.suggested_description,
           practice: asPracticeRef(row.suggested_practice),
+          bhajan: row.suggested_bhajan ?? undefined,
         }
       : undefined,
   createdAt: row.created_at,
@@ -78,9 +103,7 @@ const askJainamRoutes: FastifyPluginAsync = async (app) => {
     if (rows.length === 0 && !before) {
       const seed = await serviceClient
         .from("ask_jainam_seed_messages")
-        .select(
-          "id, role, text, sanskrit_text, sanskrit_transliteration, sanskrit_translation, suggested_title, suggested_description, suggested_practice",
-        )
+        .select(`id, ${SEED_COLS}`)
         .order("sort_order", { ascending: false });
       assertNoDbError(app, seed.error, "load seed conversation");
       return {
@@ -118,7 +141,8 @@ const askJainamRoutes: FastifyPluginAsync = async (app) => {
     assertNoDbError(app, historyRes.error, "load chat context");
     const history = ((historyRes.data ?? []) as MsgRow[]).reverse().map(toMessage);
 
-    const reply = await getGuruReply(text, history);
+    const bhajans = await loadBhajanRefs();
+    const reply = await getGuruReply(text, history, { bhajans });
     const now = Date.now();
 
     // First real message: also persist the seed exchange so history stays
@@ -126,9 +150,7 @@ const askJainamRoutes: FastifyPluginAsync = async (app) => {
     if (history.length === 0) {
       const seed = await serviceClient
         .from("ask_jainam_seed_messages")
-        .select(
-          "role, text, sanskrit_text, sanskrit_transliteration, sanskrit_translation, suggested_title, suggested_description, suggested_practice, sort_order",
-        )
+        .select(`${SEED_COLS}, sort_order`)
         .order("sort_order", { ascending: true });
       assertNoDbError(app, seed.error, "load seed conversation");
       if (seed.data?.length) {
@@ -142,6 +164,7 @@ const askJainamRoutes: FastifyPluginAsync = async (app) => {
           suggested_title: (r.suggested_title as string | null) ?? null,
           suggested_description: (r.suggested_description as string | null) ?? null,
           suggested_practice: (r.suggested_practice as string | null) ?? null,
+          suggested_bhajan: (r.suggested_bhajan as number | null) ?? null,
           created_at: new Date(now - 60_000 + i).toISOString(),
         }));
         const seeded = await serviceClient.from("chat_messages").insert(seedRows);
@@ -163,6 +186,7 @@ const askJainamRoutes: FastifyPluginAsync = async (app) => {
           suggested_title: reply.suggestedPractice?.title ?? null,
           suggested_description: reply.suggestedPractice?.description ?? null,
           suggested_practice: reply.suggestedPractice?.practice ?? null,
+          suggested_bhajan: reply.suggestedPractice?.bhajan ?? null,
           created_at: new Date(now + 1).toISOString(),
         },
       ])

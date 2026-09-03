@@ -187,9 +187,16 @@ in the voice of a wise, warm guru — not a generic assistant.
      (gold border, "Begin in the app" + chevron) that deep-links to that
      screen — `/sadhana/<ref>`, or `/meditate` / `/pratikraman`. The model
      picks the ref via structured output; a server-side keyword resolver
-     fills it in when the model leaves it blank. `chat_messages` /
-     `ask_jainam_seed_messages` carry a nullable `suggested_practice` column
-     (migration `20260903050000`).
+     fills it in when the model leaves it blank.
+     - The guru may instead suggest a **bhajan** — `suggestedPractice.bhajan`
+       is a number from the app's catalogue (injected into the system prompt
+       so it can only cite real ones; the server re-validates and overwrites
+       the tile title with the catalogue name). The tile then reads
+       "Suggested Bhajan" / "Listen in the app" and opens `/bhajans/<number>`.
+       A bhajan and a practice are mutually exclusive per reply.
+     - Persisted columns on `chat_messages` / `ask_jainam_seed_messages`:
+       `suggested_practice` (migration `20260903050000`), `suggested_bhajan`
+       (`20260903070000`).
 3. Input row: multiline text input ("Ask anything...") + circular send
    button (gold).
 

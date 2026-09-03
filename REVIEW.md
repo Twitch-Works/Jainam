@@ -117,6 +117,13 @@ without touching `LLM_PROVIDER`.
   Review that the resolver's regexes route sensibly and that the model's
   choices land on the right practice (e.g. a forgiveness suggestion →
   `pratikraman`, not `anupreksha`).
+- [ ] **Bhajan suggestions** — the reply can instead carry
+  `suggestedPractice.bhajan` (a number). The bhajan catalogue is injected
+  into the system prompt and the server re-validates the number + rewrites
+  the tile title from the catalogue, so a wrong/hallucinated number is
+  dropped. Still worth checking on real traffic that the guru picks a
+  *fitting* song for the mood, and that it doesn't over-suggest bhajans in
+  place of scriptural guidance. Tied to §13 (unverified bhajan lyrics).
 
 ### 2b. Sanskrit / Prākṛt quotations in the offline fallback + seed (AI-drafted, unverified)
 

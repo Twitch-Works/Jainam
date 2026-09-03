@@ -38,6 +38,7 @@ Rules:
   - "anupreksha" — structured contemplation / the twelve reflections
   - "japa" — repeating a mantra on a mālā
   - "meditate" — free breath-and-stillness sitting with optional background sound
+- Alternatively, when a devotional song would steady the seeker's heart — longing, grief, gratitude, restlessness before sitting — you may point them to a bhajan instead of a practice: set "suggestedPractice.bhajan" to its number from the list you are given, use the bhajan's own name as the title, and give a one-line reason as the description. Suggest a bhajan OR a practice, never both, and only from the provided list.
 - Reply with the structured guidance object only — a "text" field, plus an optional "sanskrit" verse and an optional "suggestedPractice".`;
 
 const guidanceInputSchema = z.object({
@@ -54,9 +55,22 @@ const guidanceInputSchema = z.object({
       title: z.string().min(1),
       description: z.string().min(1),
       practice: z.enum(SUGGESTED_PRACTICE_REFS).optional(),
+      bhajan: z.number().int().positive().optional(),
     })
     .optional(),
 });
+
+/** Number + display title of each bhajan, passed in so the guru can cite one. */
+export type BhajanRef = { number: number; title: string };
+
+function buildSystemPrompt(bhajans: BhajanRef[]): string {
+  if (bhajans.length === 0) return SYSTEM_PROMPT;
+  const list = bhajans.map((b) => `${b.number} — ${b.title}`).join("\n");
+  return `${SYSTEM_PROMPT}
+
+Bhajans available in the app (number — name). Only ever set "suggestedPractice.bhajan" to one of these numbers:
+${list}`;
+}
 
 // Keyword fallback: if the model gave a suggestion but no `practice` ref (or an
 // unrecognised one), infer the closest in-app screen from the wording. Specific
@@ -103,6 +117,7 @@ function stripNulls(raw: unknown): unknown {
     } else if (o.suggestedPractice && typeof o.suggestedPractice === "object") {
       const sp = o.suggestedPractice as Record<string, unknown>;
       if (sp.practice === null || sp.practice === "") delete sp.practice;
+      if (sp.bhajan === null || sp.bhajan === 0) delete sp.bhajan;
     }
   }
   return raw;
@@ -145,6 +160,10 @@ const deliverGuidanceTool: Anthropic.Tool = {
             enum: [...SUGGESTED_PRACTICE_REFS],
             description: "The matching in-app guided practice, or omit if none fits.",
           },
+          bhajan: {
+            type: "integer",
+            description: "A bhajan number from the provided list, when a song fits instead of a practice.",
+          },
         },
       },
     },
@@ -164,11 +183,11 @@ function getAnthropic(): Anthropic {
   return anthropicClient;
 }
 
-async function anthropicGenerate(turns: Turn[]): Promise<unknown> {
+async function anthropicGenerate(turns: Turn[], system: string): Promise<unknown> {
   const res = await getAnthropic().messages.create({
     model: env.ANTHROPIC_MODEL,
     max_tokens: 1024,
-    system: SYSTEM_PROMPT,
+    system,
     output_config: { effort: "low" },
     tools: [deliverGuidanceTool],
     tool_choice: { type: "tool", name: "deliver_guidance" },
@@ -206,7 +225,7 @@ const openaiSchema = {
     suggestedPractice: {
       type: ["object", "null"],
       additionalProperties: false,
-      required: ["title", "description", "practice"],
+      required: ["title", "description", "practice", "bhajan"],
       properties: {
         title: { type: "string" },
         description: { type: "string" },
@@ -214,6 +233,10 @@ const openaiSchema = {
           type: ["string", "null"],
           enum: [...SUGGESTED_PRACTICE_REFS, null],
           description: "The matching in-app guided practice, or null if none fits.",
+        },
+        bhajan: {
+          type: ["integer", "null"],
+          description: "A bhajan number from the provided list, or null. Suggest a bhajan OR a practice, not both.",
         },
       },
     },
@@ -227,12 +250,12 @@ function getOpenAI(): OpenAI {
   return openaiClient;
 }
 
-async function openaiGenerate(turns: Turn[]): Promise<unknown> {
+async function openaiGenerate(turns: Turn[], system: string): Promise<unknown> {
   const res = await getOpenAI().chat.completions.create({
     model: env.OPENAI_MODEL,
     max_completion_tokens: 1024,
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: system },
       ...turns.map((t) => ({ role: t.role, content: t.content })),
     ],
     response_format: {
@@ -281,6 +304,11 @@ const geminiSchema: ResponseSchema = {
           nullable: true,
           description: "The matching in-app guided practice, or null if none fits.",
         },
+        bhajan: {
+          type: SchemaType.INTEGER,
+          nullable: true,
+          description: "A bhajan number from the provided list, or null. A bhajan OR a practice, not both.",
+        },
       },
       required: ["title", "description"],
     },
@@ -295,7 +323,7 @@ function getGemini(): GoogleGenerativeAI {
   return geminiClient;
 }
 
-async function geminiGenerate(turns: Turn[]): Promise<unknown> {
+async function geminiGenerate(turns: Turn[], system: string): Promise<unknown> {
   const generationConfig = {
     // Headroom: Gemini 3.x "flash" models spend output tokens on internal
     // reasoning, so a tight cap truncates the JSON body.
@@ -308,7 +336,7 @@ async function geminiGenerate(turns: Turn[]): Promise<unknown> {
 
   const model = getGemini().getGenerativeModel({
     model: env.GEMINI_MODEL,
-    systemInstruction: SYSTEM_PROMPT,
+    systemInstruction: system,
     generationConfig,
   });
 
@@ -331,7 +359,7 @@ type Provider = "anthropic" | "openai" | "gemini";
 
 const providers: Record<
   Provider,
-  { hasKey: () => boolean; generate: (turns: Turn[]) => Promise<unknown> }
+  { hasKey: () => boolean; generate: (turns: Turn[], system: string) => Promise<unknown> }
 > = {
   anthropic: { hasKey: () => Boolean(env.ANTHROPIC_API_KEY), generate: anthropicGenerate },
   openai: { hasKey: () => Boolean(env.OPENAI_API_KEY), generate: openaiGenerate },
@@ -373,23 +401,39 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
  * configured or all of them fail, returns the offline keyword reply so the
  * feature always answers.
  */
-export async function getGuruReply(prompt: string, history: ChatMessage[] = []): Promise<GuruReply> {
+export async function getGuruReply(
+  prompt: string,
+  history: ChatMessage[] = [],
+  opts: { bhajans?: BhajanRef[] } = {},
+): Promise<GuruReply> {
   const turns = buildTurns(prompt, history);
+  const bhajans = opts.bhajans ?? [];
+  const system = buildSystemPrompt(bhajans);
+  const bhajanTitles = new Map(bhajans.map((b) => [b.number, b.title]));
   const chain = providerChain();
 
   for (let i = 0; i < chain.length; i++) {
     const provider = chain[i];
     try {
       const raw = await withTimeout(
-        providers[provider].generate(turns),
+        providers[provider].generate(turns, system),
         PROVIDER_TIMEOUT_MS,
         provider,
       );
       const reply = guidanceInputSchema.parse(stripNulls(raw));
-      // If the model suggested a practice but didn't tag a screen, infer one.
-      if (reply.suggestedPractice && !reply.suggestedPractice.practice) {
-        const ref = resolvePracticeRef(reply.suggestedPractice);
-        if (ref) reply.suggestedPractice.practice = ref;
+      const sp = reply.suggestedPractice;
+      if (sp) {
+        // Drop a hallucinated bhajan number; a real one wins over a practice tag
+        // and gets the catalogue's title so the tile always reads right.
+        if (sp.bhajan != null && !bhajanTitles.has(sp.bhajan)) delete sp.bhajan;
+        if (sp.bhajan != null) {
+          delete sp.practice;
+          sp.title = bhajanTitles.get(sp.bhajan) ?? sp.title;
+        } else if (!sp.practice) {
+          // Model suggested a practice but didn't tag a screen — infer one.
+          const ref = resolvePracticeRef(sp);
+          if (ref) sp.practice = ref;
+        }
       }
       return reply;
     } catch (err) {

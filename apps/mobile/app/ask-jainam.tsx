@@ -31,6 +31,12 @@ function openPractice(ref: SuggestedPracticeRef) {
   return router.push(`/sadhana/${ref}` as const); // samayik | khayotsarga | anupreksha | japa
 }
 
+/** Open whatever follow-up the guru attached to a message — a bhajan wins over a practice. */
+function openSuggestion(sp: NonNullable<ChatMessage["suggestedPractice"]>) {
+  if (sp.bhajan) return router.push(`/bhajans/${sp.bhajan}` as const);
+  if (sp.practice) return openPractice(sp.practice);
+}
+
 function MessageBubble({ message }: { message: ChatMessage }) {
   if (message.role === "user") {
     return (
@@ -62,19 +68,23 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       <Text style={styles.guruText}>{message.text}</Text>
       {sp ? (
         <View style={styles.suggestedWrap}>
-          <Text style={styles.suggestedLabel}>Suggested Practice</Text>
-          {sp.practice ? (
+          <Text style={styles.suggestedLabel}>
+            {sp.bhajan ? "Suggested Bhajan" : "Suggested Practice"}
+          </Text>
+          {sp.bhajan || sp.practice ? (
             <Pressable
-              onPress={() => openPractice(sp.practice!)}
+              onPress={() => openSuggestion(sp)}
               style={({ pressed }) => [styles.suggestedTile, pressed && styles.suggestedTilePressed]}
               accessibilityRole="button"
-              accessibilityHint="Opens this practice in the app"
+              accessibilityHint={sp.bhajan ? "Opens this bhajan in the app" : "Opens this practice in the app"}
             >
               <LotusIcon size={18} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.suggestedTitle}>{sp.title}</Text>
                 <Text style={styles.suggestedDescription}>{sp.description}</Text>
-                <Text style={styles.suggestedCta}>Begin in the app</Text>
+                <Text style={styles.suggestedCta}>
+                  {sp.bhajan ? "Listen in the app" : "Begin in the app"}
+                </Text>
               </View>
               <ChevronRightIcon color={colors.goldDeep} />
             </Pressable>
