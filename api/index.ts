@@ -9,7 +9,7 @@
  * `packages/shared/dist/` before this function is bundled.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { buildApp } from "../apps/api/dist/app.js";
+import { buildApp } from "../dist/app.js";
 
 // Build the app once per warm instance; reuse across invocations.
 const ready = (async () => {
