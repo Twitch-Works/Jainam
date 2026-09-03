@@ -92,29 +92,27 @@ two in sync.
 
 ## Deploying the API to Vercel
 
-Only `apps/api` is deployed — the Expo app is shipped separately. The Vercel
-config sits at the **repo root**: `vercel.json`,
-`api/serverless/[[...path]].ts` (a catch-all wrapper around `buildApp()`),
-`api/ping.ts` (a no-dep health check), and `public/` (a placeholder landing
-page).
+`apps/api` is its own Vercel project — the Expo app ships separately. The
+config lives in `apps/api/`: `vercel.json`, `api/index.ts` (a ~10-line
+wrapper handing each request to Fastify — Vercel has no persistent-server
+mode, so this is unavoidable), `api/tsconfig.json` (compiler options for that
+one file), and an empty `public/` (Vercel wants an output dir).
 
-1. **Import the repo** into Vercel and leave **Root Directory = repo root**
-   (the function imports the built app + needs the pnpm workspace).
-   `vercel.json` sets the build (`pnpm --filter=@jainam/api... run build` —
-   compiles `@jainam/shared` + `@jainam/api`, incl. `.d.ts`) and routes every
-   non-file path to the function.
+1. **Import the repo** into Vercel, then **Settings → General → Root
+   Directory → `apps/api`**. `apps/api/vercel.json` sets the build
+   (`pnpm --filter=@jainam/api... run build` — compiles `@jainam/shared` +
+   `@jainam/api`, incl. `.d.ts`) and rewrites every path to the function.
+   Leave *"Include source files outside the Root Directory"* checked (auto for
+   Turborepo) so the workspace install works.
 2. **Set env vars** (Project → Settings → Environment Variables). Required —
    the function exits on boot if any are missing:
    `APP_ENV=production`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
    `SUPABASE_SERVICE_ROLE_KEY`, plus `LLM_PROVIDER` and its key
    (`OPENAI_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` + `*_MODEL`).
    Do **not** set `SUPABASE_DB_URL` (local-only, for `db:migrate`).
-3. **Region** — `vercel.json` pins `bom1`; change it to match your Supabase
-   project's region.
-4. **Deploy**, then verify `…/api/ping` → `{"ok":true,…}` and `…/health` →
-   the health JSON. Point the app at it: set
-   `EXPO_PUBLIC_API_URL=https://<project>.vercel.app` in `apps/mobile/.env`
-   and rebuild.
+3. **Deploy**, then verify `…/health` → the health JSON. Point the app at it:
+   set `EXPO_PUBLIC_API_URL=https://<project>.vercel.app` in
+   `apps/mobile/.env` and rebuild.
 
 Migrations and seeds still run from a workstation against the hosted DB
 (`pnpm db:migrate` / `db:seed` / `db:bhajans`) — Vercel only runs the API.

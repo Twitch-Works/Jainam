@@ -1,0 +1,13 @@
+{
+  "//": "For the Vercel entrypoint only. Not extended from ../tsconfig.json (that one is scoped to src/ with rootDir and would reject this file). @vercel/node uses the nearest tsconfig.",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "types": ["node"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["**/*.ts"]
+}
